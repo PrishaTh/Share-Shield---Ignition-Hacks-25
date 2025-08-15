@@ -10,7 +10,7 @@ Given plain text from an OCR pass, identify sensitive data and return spans.
 Rules:
 - Return ONLY JSON via the provided schema.
 - Prefer high precision; do not hallucinate spans not present in text.
-- Detect: api keys, tokens, JWTs, passwords, private key blocks, AWS keys, OAuth/Bearer tokens,
+- Detect: api keys, tokens, JWTs, passwords, images, private key blocks, AWS keys, OAuth/Bearer tokens,
   credit cards (Luhn), IBAN, bank acct & routing numbers, SWIFT/BIC, emails, phones, IPs, addresses,
   national IDs (e.g., SSN/SIN), URLs that contain tokens.
 - For value_preview, mask most of the value (e.g., last 4).

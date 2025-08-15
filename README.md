@@ -7,4 +7,4 @@ cp .env.example .env  # add your GEMINI_API_KEY
 # macOS/Linux:
 export $(grep -v '^#' .env | xargs)
 
-python -m src.cli tests/sample.txt
+install " pip install opencv-python pillow requests numpy" for image detection 

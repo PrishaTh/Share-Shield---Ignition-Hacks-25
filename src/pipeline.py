@@ -3,6 +3,7 @@ from src.sanitizer import pre_scrub
 from src.detectors.fallback_regex import run_fallback
 from src.detectors.gemini_detector import detect_with_gemini
 from src.schema import Findings, Finding
+from src.redactor import blackout_regions, blur_regions
 
 def classify_text(text: str, privacy_first: bool = True, use_fallback: bool = True) -> Findings:
     scrubbed = text
@@ -24,3 +25,9 @@ def classify_text(text: str, privacy_first: bool = True, use_fallback: bool = Tr
     # sort by start
     merged.sort(key=lambda f: (f.start, f.end))
     return Findings(findings=merged)
+
+def classify_and_redact(image_path, ocr_results):
+    findings = classify_text(ocr_results["text"])
+    boxes = map_findings_to_boxes(findings, ocr_results)
+    blackout_regions(image_path, boxes, "output.png")
+    return "output.png"
