@@ -27,16 +27,17 @@ sensitive_boxes = [
     (300, 500, 200, 50)   # box 2
 ]
 
-blackout_regions("input.png", sensitive_boxes, "output_blacked.png")
-
 # Blur sensitive regions instead of blacking them out
 def blur_regions(image_path, boxes, output_path):
-    img = cv2.imread(image_path)
+    boxes = detector()
+    img = cv2.imread("screenshot.png")
 
     for (x, y, w, h) in boxes:
-        roi = img[y:y+h, x:x+w]
+        roi = img[int(y/1.9):int((y+h)/1.9), int(x/1.9):int((x+w)/1.9)]
         blurred = cv2.GaussianBlur(roi, (51, 51), 0)
-        img[y:y+h, x:x+w] = blurred
+        img[int(y/1.9):int((y+h)/1.9), int(x/1.9):int((x+w)/1.9)] = blurred
 
     cv2.imwrite(output_path, img)
     return output_path
+
+blur_regions("input.png", sensitive_boxes, "output_blurred.png")
