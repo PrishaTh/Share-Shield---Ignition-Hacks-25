@@ -8,13 +8,11 @@ response = client.models.generate_content(
 )
 print(response.text)
 
-def detector(image_path=None):
+def detector(categories, image_path=None):
 
-    if image_path:
-        img = cv2.imread(image_path)
-    else:
-        img = capture_screen(monitor_index=1)
-
+    img = capture_screen(image_path=image_path)
+    cv2.imwrite("temp.png", img)
+    
     H, W = img.shape[:2]
 
     ocr_all = run_ocr(img, psm=11)
@@ -37,13 +35,15 @@ def detector(image_path=None):
     
     response = client.models.generate_content(
         model="gemini-2.5-flash", 
-        contents="You are to read a list of text, and identify any text that might be considered sensitive information, such as API keys, personal data, or confidential information. You are to only return the pieces of text that are considered sensitive information, seperated by commas. Here is the list of lines:" + str(lines)
+        contents="You are to read a list of text, and identify any text that might be considered sensitive information, such as API keys, personal data, or confidential information. You are to only return the pieces of text that are considered sensitive information, seperated by commas. If the following list is empty, flag all sensitive data, if it is not empty, only flag the following:" + str(categories) +  ". \n Here is the list of lines:" + str(lines)
     )
     sensitive_info = []
-    
+
+    img = cv2.imread("temp.png")
+
     if not response.text:
         print("No response.")
-        return []
+        return img, []
 
     for line in response.text.split(","):
         line = line.strip()

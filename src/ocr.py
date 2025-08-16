@@ -15,10 +15,16 @@ UPSCALE = 1.9
 BOTTOM_BAND = 0.2 
 
 # -------------------- Capture --------------------
-def capture_screen(monitor_index: int = 1) -> np.ndarray:
-    with mss.mss() as sct:
-        raw = sct.grab(sct.monitors[monitor_index])   # BGRA
-        return np.array(raw)[:, :, :3].copy()         # BGR
+def capture_screen(monitor_index: int = 1, image_path: Optional[str] = None) -> np.ndarray:
+    if image_path:
+        img = cv2.imread(image_path, cv2.IMREAD_COLOR)  # Already BGR
+        if img is None:
+            raise FileNotFoundError(f"Could not load image from path: {image_path}")
+        return np.ascontiguousarray(img, dtype=np.uint8)
+    else:
+        with mss.mss() as sct:
+            raw = sct.grab(sct.monitors[monitor_index])   # BGRA
+            return np.array(raw)[:, :, :3].copy()         # BGR
 
 def preprocess_for_ocr(img_bgr: np.ndarray, invert_if_dark=True, upscale=UPSCALE,
                        binarize: Optional[str] = "otsu") -> np.ndarray:
