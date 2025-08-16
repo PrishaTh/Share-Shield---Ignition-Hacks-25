@@ -432,7 +432,7 @@ function App() {
                   }`}
                 >
                   <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all duration-200 ${
-                    state.toggles.master ? 'left-5' : 'left-0.5'
+                    state.toggles.master ? 'left-6' : 'left-0.5'
                   }`} />
                 </button>
               </div>
