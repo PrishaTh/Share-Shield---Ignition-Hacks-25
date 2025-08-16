@@ -1,4 +1,5 @@
 import cv2
+from detector import detector
 
 # Blacking out sensitive regions
 def blackout_regions(image_path, boxes, output_path):
@@ -9,11 +10,12 @@ def blackout_regions(image_path, boxes, output_path):
     boxes: list of (x, y, w, h) coordinates for sensitive regions
     output_path: where to save the blacked-out image
     """
-    img = cv2.imread(image_path)
+    boxes = detector()
+    img = cv2.imread("screenshot.png")
 
     for (x, y, w, h) in boxes:
         # Draw a solid black rectangle over the sensitive region
-        cv2.rectangle(img, (x, y), (x + w, y + h), (0, 0, 0), -1)
+        cv2.rectangle(img, (int(x/(1.9)), int(y/(1.9))), (int((x + w)/(1.9)), int((y + h)/(1.9))), (0, 0, 0), -1)
 
     cv2.imwrite(output_path, img)
     return output_path

@@ -13,6 +13,9 @@ def detector():
     img = capture_screen(monitor_index=1)
     H, W = img.shape[:2]
     # print(f"[OK] Captured screen: {W}x{H}")
+    
+    screenshot_path = "screenshot.png"
+    cv2.imwrite(screenshot_path, img)
 
     ocr_all = run_ocr(img, psm=11)
 
@@ -38,6 +41,10 @@ def detector():
         contents="You are to read a list of text, and identify any text that might be considered sensitive information, such as API keys, personal data, or confidential information. You are to only return the pieces of text that are considered sensitive information, seperated by commas. Here is the list of lines:" + str(lines)
     )
     sensitive_info = []
+    
+    if not response.text:
+        print("No response.")
+        return []
 
     for line in response.text.split(","):
         line = line.strip()
