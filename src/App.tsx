@@ -209,7 +209,28 @@ function App() {
   //   }
   // }, []);
 
-  const startScreenShare = useCallback(async () => {
+  const drawLoop = () => {
+  const canvas = canvasRef.current;
+  const videoEl = videoRef.current;
+  if (!canvas || !videoEl) return;
+
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  canvas.width = videoEl.videoWidth || 1920;
+  canvas.height = videoEl.videoHeight || 1080;
+
+  // Always draw live frame
+  ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+
+  // Apply blackout overlays
+  drawLiveOverlay(ctx);
+
+  requestAnimationFrame(drawLoop);
+};
+
+
+const startScreenShare = useCallback(async () => {
   try {
     setApiError(null);
     const stream = await navigator.mediaDevices.getDisplayMedia({
@@ -225,29 +246,10 @@ function App() {
     video.srcObject = stream;
     await video.play();
 
-    // 🔹 Continuous drawing loop for smooth blackout overlay
-    const drawLoop = () => {
-      const canvas = canvasRef.current;
-      const videoEl = videoRef.current;
-      if (!canvas || !videoEl) return;
-
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      canvas.width = videoEl.videoWidth || 1920;
-      canvas.height = videoEl.videoHeight || 1080;
-
-      // Always draw live frame
-      ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-
-      // Always apply blackout overlays
-      drawLiveOverlay(ctx);
-
-      requestAnimationFrame(drawLoop);
-    };
+    // 🔹 Kick off draw loop
     drawLoop();
 
-    // 🔹 Periodic scanning just updates findings
+    // 🔹 Periodic scanning for findings
     scanIntervalRef.current = window.setInterval(async () => {
       const canvas = canvasRef.current;
       const videoEl = videoRef.current;
@@ -269,6 +271,7 @@ function App() {
       }
     }, 2000);
 
+    // Handle stop
     stream.getVideoTracks()[0].onended = () => {
       stopScreenShare();
     };
@@ -279,6 +282,7 @@ function App() {
     updateState({ mode: 'idle', isStreaming: false });
   }
 }, []);
+
 
   const stopScreenShare = useCallback(() => {
     if (streamRef.current) {
