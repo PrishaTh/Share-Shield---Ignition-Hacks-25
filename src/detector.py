@@ -8,14 +8,14 @@ response = client.models.generate_content(
 )
 print(response.text)
 
-def detector():
-    
-    img = capture_screen(monitor_index=1)
+def detector(image_path=None):
+
+    if image_path:
+        img = cv2.imread(image_path)
+    else:
+        img = capture_screen(monitor_index=1)
+
     H, W = img.shape[:2]
-    # print(f"[OK] Captured screen: {W}x{H}")
-    
-    screenshot_path = "screenshot.png"
-    cv2.imwrite(screenshot_path, img)
 
     ocr_all = run_ocr(img, psm=11)
 
@@ -31,7 +31,6 @@ def detector():
 
 
     ocr = merge_ocr_dicts(ocr_all, ocr_band)
-    # print(f"[OK] OCR tokens merged: {len(ocr['text'])}")
 
     lines = extract_text_list(ocr, min_conf=MIN_CONF)
     
@@ -50,8 +49,11 @@ def detector():
         line = line.strip()
         sensitive_info.extend(find_text_boxes(ocr, line, case_sensitive=False, whole_word=False, min_conf=MIN_CONF))
 
+    for i, (x, y, w, h) in enumerate(sensitive_info):
+        sensitive_info[i] = (int(x/1.9), int(y/1.9), int(w/1.9), int(h/1.9))
+
     print(sensitive_info)
-    return sensitive_info
+    return img, sensitive_info
 
 if __name__ == "__main__":
     detector()
