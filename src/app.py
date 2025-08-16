@@ -83,9 +83,11 @@ def scan_image():
         
         try:
             # Run detection using your existing detector
+            # Pass empty list to detect ALL sensitive information
             print(f"Running detection on: {temp_path}")
-            img, sensitive_info = detector(temp_path)
+            img, sensitive_info = detector([], temp_path)  # Fixed: pass categories parameter
             print(f"Detection found {len(sensitive_info)} sensitive items")
+            print(f"Sensitive info coordinates: {sensitive_info}")
             
             # Format findings for frontend
             findings = format_findings(sensitive_info, img.shape)
@@ -120,10 +122,11 @@ def scan_frame():
         
         try:
             # Run detection using your existing detector
-            img, sensitive_info = detector(temp_path)
+            # Pass empty list to detect ALL sensitive information
+            img, sensitive_info = detector([], temp_path)  # Fixed: pass categories parameter
             
             # Format findings for frontend
-            findings = format_findings(sensitive_info, img.shape)
+            findings = format_findings(sensitive_info, img_shape)
             
             return jsonify({'findings': findings})
             
@@ -156,13 +159,20 @@ def redact_image():
             # Apply redaction based on method using your existing functions
             redaction_method = data.get('method', 'blackout')
             
+            # Create empty categories dict to trigger detection of ALL sensitive info
+            categories = {}
+            
             if redaction_method == 'blur':
-                output_path = blur_regions(temp_output, {}, temp_input)
+                output_path = blur_regions(temp_output, categories, temp_input)
             else:
-                output_path = blackout_regions(temp_output, {}, temp_input)
+                output_path = blackout_regions(temp_output, categories, temp_input)
 
             # Read the redacted image and convert back to base64
             redacted_image = cv2.imread(output_path)
+            if redacted_image is None:
+                # If the output file doesn't exist, use the input image
+                redacted_image = opencv_image
+            
             _, buffer = cv2.imencode('.png', redacted_image)
             redacted_base64 = base64.b64encode(buffer).decode('utf-8')
             
@@ -178,6 +188,8 @@ def redact_image():
             
     except Exception as e:
         print(f"Error in redact_image: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/health', methods=['GET'])
