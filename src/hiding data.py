@@ -2,12 +2,12 @@ import cv2
 import numpy as np
 from detector import detector
 
-# Blacking out sensitive regions
 def blackout_regions(output_path, categories, image_path=None):
     """
     Black out sensitive areas in an image.
 
     output_path: where to save the blacked-out image
+    categories: a dictionary of categories and if they are sensitive
     image_path: path to original image if none is provided, a screenshot of the current screen will be taken
     """
     cat = [key for key in categories.keys() if categories[key] == 1]
@@ -20,12 +20,12 @@ def blackout_regions(output_path, categories, image_path=None):
     cv2.imwrite(output_path, img)
     return output_path
 
-# Blur sensitive regions instead of blacking them out
 def blur_regions(output_path, categories, image_path=None):
     """
     Blur sensitive areas in an image.
 
     output_path: where to save the blurred image
+    categories: a dictionary of categories and if they are sensitive
     image_path: path to original image if none is provided, a screenshot of the current screen will be taken
     """
     cat = [key for key in categories.keys() if categories[key] == 1]

@@ -1,5 +1,6 @@
 from google import genai
 from ocr import *
+import os
 
 client = genai.Client(api_key="AIzaSyDB8440WGk3uSMDriAi7PXs5zBIbfa-SYs")
 
@@ -40,6 +41,7 @@ def detector(categories, image_path=None):
     sensitive_info = []
 
     img = cv2.imread("temp.png")
+    os.remove("temp.png")
 
     if not response.text:
         print("No response.")
