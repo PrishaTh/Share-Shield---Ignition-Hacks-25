@@ -28,7 +28,8 @@ def detector(categories, image_path=None):
     try:
         # Capture or load the image
         img = capture_screen(image_path=image_path)
-        cv2.imwrite("temp.png", img)
+        temp_file = "temp.png"
+        cv2.imwrite(temp_file, img)
         
         H, W = img.shape[:2]
         print(f"Image dimensions: {W}x{H}")
@@ -52,7 +53,14 @@ def detector(categories, image_path=None):
         # Extract text lines from OCR results
         lines = extract_text_list(ocr, min_conf=MIN_CONF)
         print(f"Extracted {len(lines)} text lines from image")
-        print(f"Sample lines: {lines[:5]}")  # Show first 5 lines for debugging
+        print(f"Sample lines: {lines[:3]}")  # Show first 3 lines for debugging
+        
+        # If no text found, return early
+        if not lines:
+            print("No text found in image")
+            if os.path.exists(temp_file):
+                os.remove(temp_file)
+            return img, []
         
         # Prepare prompt for Gemini
         if not categories or len(categories) == 0:
@@ -73,50 +81,61 @@ Text to analyze:
 
         print(f"Sending prompt to Gemini with {len(lines)} lines of text")
         
-        # Send to Gemini for analysis
-        response = client.models.generate_content(
-            model="gemini-2.5-flash", 
-            contents=prompt
-        )
-        
         sensitive_info = []
-        img_processed = cv2.imread("temp.png")
+        
+        try:
+            # Send to Gemini for analysis
+            response = client.models.generate_content(
+                model="gemini-2.5-flash", 
+                contents=prompt
+            )
+            
+            if not response.text or response.text.strip().upper() == "NONE":
+                print("No sensitive information detected by Gemini")
+            else:
+                print(f"Gemini response: {response.text}")
+                
+                # Process each sensitive item found by Gemini
+                sensitive_items = [item.strip() for item in response.text.split(",") if item.strip()]
+                print(f"Processing {len(sensitive_items)} sensitive items")
+                
+                for item in sensitive_items:
+                    if not item or item.upper() == "NONE":
+                        continue
+                        
+                    # Find bounding boxes for this sensitive text
+                    boxes = find_text_boxes(ocr, item, case_sensitive=False, whole_word=False, min_conf=MIN_CONF)
+                    print(f"Found {len(boxes)} boxes for item: '{item}'")
+                    
+                    for box in boxes:
+                        # Apply scaling correction (your OCR upscales by 1.9)
+                        x, y, w, h = box
+                        scaled_box = (int(x/1.9), int(y/1.9), int(w/1.9), int(h/1.9))
+                        sensitive_info.append(scaled_box)
+        
+        except Exception as api_error:
+            print(f"Gemini API error: {api_error}")
+            # Fall back to basic regex detection if API fails
+            sensitive_info = fallback_detection(ocr, lines)
         
         # Clean up temp file
-        if os.path.exists("temp.png"):
-            os.remove("temp.png")
-
-        if not response.text or response.text.strip().upper() == "NONE":
-            print("No sensitive information detected by Gemini")
-            return img_processed, []
-
-        print(f"Gemini response: {response.text}")
-        
-        # Process each sensitive item found by Gemini
-        sensitive_items = [item.strip() for item in response.text.split(",") if item.strip()]
-        print(f"Processing {len(sensitive_items)} sensitive items")
-        
-        for item in sensitive_items:
-            if not item:
-                continue
-                
-            # Find bounding boxes for this sensitive text
-            boxes = find_text_boxes(ocr, item, case_sensitive=False, whole_word=False, min_conf=MIN_CONF)
-            print(f"Found {len(boxes)} boxes for item: '{item}'")
-            
-            for box in boxes:
-                # Apply scaling correction (your OCR upscales by 1.9)
-                x, y, w, h = box
-                scaled_box = (int(x/1.9), int(y/1.9), int(w/1.9), int(h/1.9))
-                sensitive_info.append(scaled_box)
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
 
         print(f"Final sensitive info boxes: {sensitive_info}")
-        return img_processed, sensitive_info
+        return img, sensitive_info
 
     except Exception as e:
         print(f"Error in detector: {e}")
         import traceback
         traceback.print_exc()
+        
+        # Clean up temp file if it exists
+        if 'temp_file' in locals() and os.path.exists(temp_file):
+            try:
+                os.remove(temp_file)
+            except:
+                pass
         
         # Return empty results on error
         try:
@@ -124,6 +143,42 @@ Text to analyze:
             return img, []
         except:
             return np.zeros((100, 100, 3), dtype=np.uint8), []
+
+def fallback_detection(ocr, lines):
+    """
+    Simple regex-based fallback detection when API fails
+    """
+    import re
+    
+    print("Using fallback detection...")
+    sensitive_patterns = [
+        (r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', 'email'),
+        (r'\b(?:\d{4}[-\s]?){3}\d{4}\b', 'credit_card'),
+        (r'\b\d{3}-\d{2}-\d{4}\b', 'ssn'),
+        (r'\b(?:\+1-?)?\d{3}-?\d{3}-?\d{4}\b', 'phone'),
+        (r'\b[A-Z0-9]{20,}\b', 'api_key'),
+        (r'password\s*[:=]\s*\S+', 'password'),
+        (r'key\s*[:=]\s*[A-Za-z0-9+/]{20,}', 'api_key'),
+    ]
+    
+    sensitive_info = []
+    text_all = ' '.join(lines)
+    
+    for pattern, category in sensitive_patterns:
+        matches = re.finditer(pattern, text_all, re.IGNORECASE)
+        for match in matches:
+            matched_text = match.group()
+            print(f"Fallback found {category}: {matched_text[:10]}...")
+            
+            # Find bounding boxes for this text
+            boxes = find_text_boxes(ocr, matched_text, case_sensitive=False, whole_word=False, min_conf=MIN_CONF)
+            for box in boxes:
+                x, y, w, h = box
+                scaled_box = (int(x/1.9), int(y/1.9), int(w/1.9), int(h/1.9))
+                sensitive_info.append(scaled_box)
+    
+    print(f"Fallback detection found {len(sensitive_info)} items")
+    return sensitive_info
 
 if __name__ == "__main__":
     # Test the detector

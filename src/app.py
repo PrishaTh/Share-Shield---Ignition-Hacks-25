@@ -94,10 +94,23 @@ def scan_image():
             
             return jsonify({'findings': findings})
             
+        except PermissionError as pe:
+            print(f"Permission error in scan_image: {str(pe)}")
+            # Return empty findings instead of failing
+            return jsonify({'findings': [], 'warning': 'API permission issue - detection skipped'})
+            
+        except Exception as detection_error:
+            print(f"Detection error in scan_image: {str(detection_error)}")
+            # Return empty findings instead of failing
+            return jsonify({'findings': [], 'warning': f'Detection failed: {str(detection_error)}'})
+            
         finally:
             # Clean up temporary file
             if os.path.exists(temp_path):
-                os.unlink(temp_path)
+                try:
+                    os.unlink(temp_path)
+                except:
+                    pass  # Ignore cleanup errors
             
     except Exception as e:
         print(f"Error in scan_image: {str(e)}")
@@ -126,14 +139,27 @@ def scan_frame():
             img, sensitive_info = detector([], temp_path)  # Fixed: pass categories parameter
             
             # Format findings for frontend
-            findings = format_findings(sensitive_info, img_shape)
+            findings = format_findings(sensitive_info, img.shape)
             
             return jsonify({'findings': findings})
+            
+        except PermissionError as pe:
+            print(f"Permission error in scan_frame: {str(pe)}")
+            # Return empty findings instead of failing
+            return jsonify({'findings': [], 'warning': 'API permission issue - detection skipped'})
+            
+        except Exception as detection_error:
+            print(f"Detection error in scan_frame: {str(detection_error)}")
+            # Return empty findings instead of failing
+            return jsonify({'findings': [], 'warning': f'Detection failed: {str(detection_error)}'})
             
         finally:
             # Clean up temporary file
             if os.path.exists(temp_path):
-                os.unlink(temp_path)
+                try:
+                    os.unlink(temp_path)
+                except:
+                    pass  # Ignore cleanup errors
             
     except Exception as e:
         print(f"Error in scan_frame: {str(e)}")
@@ -162,15 +188,21 @@ def redact_image():
             # Create empty categories dict to trigger detection of ALL sensitive info
             categories = {}
             
-            if redaction_method == 'blur':
-                output_path = blur_regions(temp_output, categories, temp_input)
-            else:
-                output_path = blackout_regions(temp_output, categories, temp_input)
+            try:
+                if redaction_method == 'blur':
+                    output_path = blur_regions(temp_output, categories, temp_input)
+                else:
+                    output_path = blackout_regions(temp_output, categories, temp_input)
 
-            # Read the redacted image and convert back to base64
-            redacted_image = cv2.imread(output_path)
-            if redacted_image is None:
-                # If the output file doesn't exist, use the input image
+                # Read the redacted image and convert back to base64
+                redacted_image = cv2.imread(output_path)
+                if redacted_image is None:
+                    # If the output file doesn't exist, use the input image
+                    redacted_image = opencv_image
+                
+            except (PermissionError, Exception) as redact_error:
+                print(f"Redaction failed: {str(redact_error)}")
+                # Return original image if redaction fails
                 redacted_image = opencv_image
             
             _, buffer = cv2.imencode('.png', redacted_image)
@@ -184,7 +216,10 @@ def redact_image():
             # Clean up temporary files
             for path in [temp_input, temp_output]:
                 if os.path.exists(path):
-                    os.unlink(path)
+                    try:
+                        os.unlink(path)
+                    except:
+                        pass  # Ignore cleanup errors
             
     except Exception as e:
         print(f"Error in redact_image: {str(e)}")
