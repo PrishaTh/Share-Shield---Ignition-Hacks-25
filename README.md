@@ -8,3 +8,4 @@ cp .env.example .env  # add your GEMINI_API_KEY
 export $(grep -v '^#' .env | xargs)
 
 #install " pip install opencv-python pillow requests numpy" for image detection 
+For frontend: install 'npm install lucide-react @types/react @types/react-dom' and 'npm install --save-dev @types/react @types/react-dom'

@@ -29,24 +29,64 @@ const MOCK_CATEGORIES = [
   { name: 'username', label: 'Usernames', risk: 'high' },
   { name: 'password', label: 'Passwords', risk: 'high' },
   { name: 'date', label: 'Dates', risk: 'low' },
+  { name: 'sensitive_data', label: 'Sensitive Data', risk: 'high' },
+  { name: 'api_key', label: 'API Keys', risk: 'high' },
+  { name: 'token', label: 'Tokens', risk: 'high' },
 ];
 
-// Mock API functions
-const mockScanImage = async (file: File): Promise<Finding[]> => {
-  await new Promise(resolve => setTimeout(resolve, 1500));
-  return [
-    { id: '1', label: 'email', confidence: 0.95, bbox: [50, 100, 200, 25], risk: 'high' },
-    { id: '2', label: 'phone', confidence: 0.87, bbox: [300, 150, 150, 20], risk: 'high' },
-    { id: '3', label: 'address', confidence: 0.92, bbox: [100, 250, 250, 40], risk: 'medium' },
-  ];
+// API Configuration
+const API_BASE_URL = 'http://localhost:5000/api';
+
+// API functions
+const scanImage = async (imageData: string): Promise<Finding[]> => {
+  const response = await fetch(`${API_BASE_URL}/scan-image`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ image: imageData }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`API Error: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.findings || [];
 };
 
-const mockScanFrame = async (frameData: string): Promise<Finding[]> => {
-  await new Promise(resolve => setTimeout(resolve, 200));
-  return [
-    { id: '1', label: 'email', confidence: 0.89, bbox: [120, 80, 180, 22], risk: 'high' },
-    { id: '2', label: 'token', confidence: 0.93, bbox: [200, 200, 300, 18], risk: 'high' },
-  ];
+const scanFrameData = async (frameData: string): Promise<Finding[]> => {
+  const response = await fetch(`${API_BASE_URL}/scan-frame`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ frameData }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`API Error: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.findings || [];
+};
+
+const redactImage = async (imageData: string, method: 'blackout' | 'blur' = 'blackout'): Promise<string> => {
+  const response = await fetch(`${API_BASE_URL}/redact-image`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ image: imageData, method }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`API Error: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  return data.redactedImage;
 };
 
 function App() {
@@ -61,11 +101,14 @@ function App() {
     isStreaming: false,
   });
 
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [originalImageData, setOriginalImageData] = useState<string | null>(null);
+
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
-  const animationFrameRef = useRef<number>();
+  const scanIntervalRef = useRef<number | null>(null);
 
   const updateState = (updates: Partial<AppState>) => {
     setState(prev => ({ ...prev, ...updates }));
@@ -75,6 +118,7 @@ function App() {
     const file = event.target.files?.[0];
     if (!file) return;
 
+    setApiError(null);
     updateState({ mode: 'upload', isScanning: true });
 
     const canvas = canvasRef.current;
@@ -89,12 +133,17 @@ function App() {
       canvas.height = img.height;
       ctx.drawImage(img, 0, 0);
 
+      // Convert canvas to base64 for API
+      const imageData = canvas.toDataURL('image/png');
+      setOriginalImageData(imageData);
+
       try {
-        const findings = await mockScanImage(file);
+        const findings = await scanImage(imageData);
         updateState({ findings, isScanning: false });
         renderOverlay();
       } catch (error) {
         console.error('Scan failed:', error);
+        setApiError(error instanceof Error ? error.message : 'Scan failed');
         updateState({ isScanning: false });
       }
     };
@@ -104,6 +153,7 @@ function App() {
 
   const startScreenShare = useCallback(async () => {
     try {
+      setApiError(null);
       const stream = await navigator.mediaDevices.getDisplayMedia({
         video: { width: 1920, height: 1080 }
       });
@@ -129,22 +179,21 @@ function App() {
         ctx.drawImage(video, 0, 0);
 
         const frameData = canvas.toDataURL('image/png');
+        setOriginalImageData(frameData);
         
         try {
-          const findings = await mockScanFrame(frameData);
+          const findings = await scanFrameData(frameData);
           setState(prev => ({ ...prev, findings }));
           renderOverlay();
         } catch (error) {
           console.error('Frame scan failed:', error);
-        }
-
-        if (streamRef.current && streamRef.current.active) {
-          setTimeout(scanFrame, 1000); // Scan every second
+          setApiError(error instanceof Error ? error.message : 'Frame scan failed');
         }
       };
 
       video.onloadedmetadata = () => {
-        scanFrame();
+        // Start scanning frames every 2 seconds
+        scanIntervalRef.current = window.setInterval(scanFrame, 2000);
       };
 
       stream.getVideoTracks()[0].onended = () => {
@@ -153,6 +202,7 @@ function App() {
 
     } catch (error) {
       console.error('Screen share failed:', error);
+      setApiError(error instanceof Error ? error.message : 'Screen share failed');
       updateState({ mode: 'idle', isStreaming: false });
     }
   }, []);
@@ -163,11 +213,13 @@ function App() {
       streamRef.current = null;
     }
 
-    if (animationFrameRef.current) {
-      cancelAnimationFrame(animationFrameRef.current);
+    if (scanIntervalRef.current) {
+      window.clearInterval(scanIntervalRef.current);
+      scanIntervalRef.current = null;
     }
 
     updateState({ mode: 'idle', isStreaming: false, findings: [] });
+    setOriginalImageData(null);
 
     const canvas = canvasRef.current;
     if (canvas) {
@@ -184,18 +236,18 @@ function App() {
     if (!ctx) return;
 
     // Clear existing overlays and redraw base image
-    if (state.mode === 'upload' && fileInputRef.current?.files?.[0]) {
+    if (state.mode === 'upload' && originalImageData) {
       const img = new Image();
       img.onload = () => {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.drawImage(img, 0, 0);
         drawRedactionOverlays(ctx);
       };
-      img.src = URL.createObjectURL(fileInputRef.current.files[0]);
+      img.src = originalImageData;
     } else if (state.mode === 'live') {
       drawRedactionOverlays(ctx);
     }
-  }, [state.findings, state.toggles]);
+  }, [state.findings, state.toggles, originalImageData, state.mode]);
 
   const drawRedactionOverlays = (ctx: CanvasRenderingContext2D) => {
     if (!state.toggles.master) return;
@@ -239,14 +291,22 @@ function App() {
     }));
   };
 
-  const exportRedacted = () => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+  const exportRedacted = async () => {
+    if (!originalImageData) return;
 
-    const link = document.createElement('a');
-    link.download = 'redacted-content.png';
-    link.href = canvas.toDataURL('image/png');
-    link.click();
+    try {
+      // Get redacted image from backend
+      const redactedImageData = await redactImage(originalImageData, 'blackout');
+      
+      // Create download link
+      const link = document.createElement('a');
+      link.download = 'redacted-content.png';
+      link.href = redactedImageData;
+      link.click();
+    } catch (error) {
+      console.error('Export failed:', error);
+      setApiError(error instanceof Error ? error.message : 'Export failed');
+    }
   };
 
   useEffect(() => {
@@ -284,6 +344,12 @@ function App() {
           <p className="text-gray-400 text-lg max-w-2xl mx-auto">
             Advanced privacy protection with real-time redaction for sensitive information
           </p>
+          {apiError && (
+            <div className="mt-4 p-3 bg-red-900/50 border border-red-700 rounded-lg max-w-md mx-auto">
+              <p className="text-red-300 text-sm">API Error: {apiError}</p>
+              <p className="text-red-400 text-xs mt-1">Make sure the backend server is running on http://localhost:5000</p>
+            </div>
+          )}
         </header>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
