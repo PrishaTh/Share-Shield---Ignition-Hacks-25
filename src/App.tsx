@@ -26,7 +26,7 @@ const MOCK_CATEGORIES = [
   { name: 'address', label: 'Addresses', risk: 'medium' },
   { name: 'ssn', label: 'SSN/Tax ID', risk: 'high' },
   { name: 'credit_card', label: 'Credit Cards', risk: 'high' },
-  { name: 'token', label: 'API Tokens', risk: 'high' },
+  { name: 'username', label: 'Usernames', risk: 'high' },
   { name: 'password', label: 'Passwords', risk: 'high' },
   { name: 'date', label: 'Dates', risk: 'low' },
 ];
@@ -311,7 +311,7 @@ function App() {
                     className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg cursor-pointer transition-all duration-200 hover:scale-105"
                   >
                     <Upload className="w-4 h-4" />
-                    Upload File
+                    Upload Image
                   </label>
                 </div>
 
@@ -366,7 +366,7 @@ function App() {
                   }`}
                 >
                   <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full transition-all duration-200 ${
-                    state.toggles.master ? 'left-6.5' : 'left-0.5'
+                    state.toggles.master ? 'left-5' : 'left-0.5'
                   }`} />
                 </button>
               </div>
